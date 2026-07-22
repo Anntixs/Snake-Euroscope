@@ -28,8 +28,11 @@ SnakeWindow::SnakeWindow()
 	, m_paused(false)
 	, m_timer(0)
 	, m_rngState(0)
+	, m_dragging(false)
+	, m_hoverBtn(BTN_NONE)
 {
 	m_food.x = m_food.y = 0;
+	m_dragOffset.x = m_dragOffset.y = 0;
 }
 
 SnakeWindow::~SnakeWindow()
@@ -119,17 +122,24 @@ void SnakeWindow::RunMessageLoop()
 	// RegisterClassExW is fine to call repeatedly; ignore "already registered".
 	RegisterClassExW(&wc);
 
-	const int clientW = MARGIN * 2 + GRID_W * CELL;
-	const int clientH = HEADER + MARGIN * 2 + GRID_H * CELL;
+	// Borderless window (WS_POPUP): no standard Windows caption/frame — we draw
+	// our own EuroScope-style title bar in the client area instead.  The client
+	// size IS the whole window, so no AdjustWindowRect is needed.
+	// WS_EX_APPWINDOW keeps it on the taskbar; WS_MINIMIZEBOX enables minimize.
+	DWORD style   = WS_POPUP | WS_MINIMIZEBOX;
+	DWORD exStyle = WS_EX_APPWINDOW;
 
-	RECT rc = { 0, 0, clientW, clientH };
-	DWORD style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
-	AdjustWindowRect(&rc, style, FALSE);
+	// Centre the window on the primary monitor (CW_USEDEFAULT is unreliable for
+	// WS_POPUP windows).
+	const int screenW = GetSystemMetrics(SM_CXSCREEN);
+	const int screenH = GetSystemMetrics(SM_CYSCREEN);
+	const int posX = (screenW - CLIENT_W) / 2;
+	const int posY = (screenH - CLIENT_H) / 2;
 
 	HWND hWnd = CreateWindowExW(
-		0, kClassName, kWindowTitle, style,
-		CW_USEDEFAULT, CW_USEDEFAULT,
-		rc.right - rc.left, rc.bottom - rc.top,
+		exStyle, kClassName, kWindowTitle, style,
+		posX, posY,
+		CLIENT_W, CLIENT_H,
 		NULL, NULL, hInst, this);
 
 	if (!hWnd)
@@ -169,6 +179,9 @@ LRESULT CALLBACK SnakeWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM
 		return 0;
 	case WM_LBUTTONDOWN:
 		if (self) self->OnLButtonDown((int)(short)LOWORD(lParam), (int)(short)HIWORD(lParam));
+		return 0;
+	case WM_LBUTTONUP:
+		if (self) self->OnLButtonUp((int)(short)LOWORD(lParam), (int)(short)HIWORD(lParam));
 		return 0;
 	case WM_TIMER:
 		if (self) self->OnTick();
@@ -237,8 +250,46 @@ void SnakeWindow::OnKeyDown(WPARAM key)
 	if (m_hWnd) InvalidateRect(m_hWnd, NULL, FALSE);
 }
 
+SnakeWindow::TitleButton SnakeWindow::HitTestButton(int mx, int my) const
+{
+	if (my < 0 || my >= TITLE_H)
+		return BTN_NONE;
+	if (mx >= CLIENT_W - BTN_W && mx < CLIENT_W)
+		return BTN_CLOSE;
+	if (mx >= CLIENT_W - 2 * BTN_W && mx < CLIENT_W - BTN_W)
+		return BTN_MIN;
+	return BTN_NONE;
+}
+
 void SnakeWindow::OnMouseMove(int mx, int my)
 {
+	// While dragging the title bar, move the whole window with the cursor.
+	if (m_dragging)
+	{
+		POINT pt;
+		GetCursorPos(&pt);
+		SetWindowPos(m_hWnd, NULL,
+			pt.x - m_dragOffset.x, pt.y - m_dragOffset.y,
+			0, 0, SWP_NOSIZE | SWP_NOZORDER);
+		return;
+	}
+
+	// Track hover state over the title-bar buttons so we can highlight them.
+	const TitleButton hover = HitTestButton(mx, my);
+	if (hover != m_hoverBtn)
+	{
+		m_hoverBtn = hover;
+		if (m_hWnd)
+		{
+			RECT bar = { 0, 0, CLIENT_W, TITLE_H };
+			InvalidateRect(m_hWnd, &bar, FALSE);
+		}
+	}
+
+	// Do not steer while the pointer is over the title bar.
+	if (my < TITLE_H)
+		return;
+
 	// Steer the snake toward the mouse cursor: pick the dominant axis of the
 	// vector from the head to the pointer.  This gives smooth mouse control
 	// without needing clicks.
@@ -246,7 +297,7 @@ void SnakeWindow::OnMouseMove(int mx, int my)
 		return;
 
 	const int headPxX = MARGIN + m_snake[0].x * CELL + CELL / 2;
-	const int headPxY = HEADER + MARGIN + m_snake[0].y * CELL + CELL / 2;
+	const int headPxY = TITLE_H + HEADER + MARGIN + m_snake[0].y * CELL + CELL / 2;
 
 	const int dx = mx - headPxX;
 	const int dy = my - headPxY;
@@ -263,7 +314,34 @@ void SnakeWindow::OnMouseMove(int mx, int my)
 
 void SnakeWindow::OnLButtonDown(int mx, int my)
 {
-	// A click restarts after game over, or (during play) also steers.
+	// Title-bar buttons take priority.
+	const TitleButton btn = HitTestButton(mx, my);
+	if (btn == BTN_CLOSE)
+	{
+		if (m_hWnd) PostMessage(m_hWnd, WM_CLOSE, 0, 0);
+		return;
+	}
+	if (btn == BTN_MIN)
+	{
+		if (m_hWnd) ShowWindow(m_hWnd, SW_MINIMIZE);
+		return;
+	}
+
+	// Clicking anywhere else on the title bar starts a window drag.
+	if (my < TITLE_H)
+	{
+		RECT wr;
+		GetWindowRect(m_hWnd, &wr);
+		POINT pt;
+		GetCursorPos(&pt);
+		m_dragOffset.x = pt.x - wr.left;
+		m_dragOffset.y = pt.y - wr.top;
+		m_dragging = true;
+		SetCapture(m_hWnd);
+		return;
+	}
+
+	// In the play area: a click restarts after game over, otherwise steers.
 	if (m_gameOver)
 	{
 		ResetGame();
@@ -271,6 +349,15 @@ void SnakeWindow::OnLButtonDown(int mx, int my)
 		return;
 	}
 	OnMouseMove(mx, my);
+}
+
+void SnakeWindow::OnLButtonUp(int /*mx*/, int /*my*/)
+{
+	if (m_dragging)
+	{
+		m_dragging = false;
+		ReleaseCapture();
+	}
 }
 
 void SnakeWindow::OnTick()
@@ -447,8 +534,11 @@ void SnakeWindow::Render(HDC hdc, const RECT& client)
 	FillRect(hdc, &client, bgBrush);
 	DeleteObject(bgBrush);
 
-	// Header bar.
-	RECT header = { 0, 0, client.right, HEADER };
+	// Custom EuroScope-style title bar (drawn first, occupies the top strip).
+	DrawTitleBar(hdc);
+
+	// Score header bar (below the title bar).
+	RECT header = { 0, TITLE_H, client.right, TITLE_H + HEADER };
 	HBRUSH hdrBrush = CreateSolidBrush(colHeader);
 	FillRect(hdc, &header, hdrBrush);
 	DeleteObject(hdrBrush);
@@ -463,17 +553,17 @@ void SnakeWindow::Render(HDC hdc, const RECT& client)
 	wchar_t buf[128];
 	SetTextColor(hdc, colText);
 	wsprintfW(buf, L"Score: %d", m_score);
-	RECT trScore = { MARGIN, 0, client.right / 2, HEADER };
+	RECT trScore = { MARGIN, TITLE_H, client.right / 2, TITLE_H + HEADER };
 	DrawTextW(hdc, buf, -1, &trScore, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
 
 	SetTextColor(hdc, colDim);
 	wsprintfW(buf, L"Best: %d", m_best);
-	RECT trBest = { client.right / 2, 0, client.right - MARGIN, HEADER };
+	RECT trBest = { client.right / 2, TITLE_H, client.right - MARGIN, TITLE_H + HEADER };
 	DrawTextW(hdc, buf, -1, &trBest, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
 
 	// Play field.
 	const int fieldX = MARGIN;
-	const int fieldY = HEADER + MARGIN;
+	const int fieldY = TITLE_H + HEADER + MARGIN;
 	RECT field = { fieldX, fieldY, fieldX + GRID_W * CELL, fieldY + GRID_H * CELL };
 	HBRUSH fieldBrush = CreateSolidBrush(colField);
 	FillRect(hdc, &field, fieldBrush);
@@ -560,4 +650,103 @@ void SnakeWindow::Render(HDC hdc, const RECT& client)
 
 	SelectObject(hdc, oldFont);
 	DeleteObject(font);
+
+	// Thin outer window border (since WS_POPUP has no frame of its own).
+	HPEN borderPen = CreatePen(PS_SOLID, 1, RGB(90, 96, 104));
+	HPEN oldBorderPen = (HPEN)SelectObject(hdc, borderPen);
+	HBRUSH nullBrush = (HBRUSH)GetStockObject(NULL_BRUSH);
+	HBRUSH oldBrush = (HBRUSH)SelectObject(hdc, nullBrush);
+	Rectangle(hdc, client.left, client.top, client.right, client.bottom);
+	SelectObject(hdc, oldBrush);
+	SelectObject(hdc, oldBorderPen);
+	DeleteObject(borderPen);
+}
+
+// ---------------------------------------------------------------------------
+// Custom EuroScope-style title bar
+// ---------------------------------------------------------------------------
+
+void SnakeWindow::DrawTitleBar(HDC hdc)
+{
+	// Colours picked to match EuroScope's window chrome: a flat medium-grey
+	// caption strip with white text and small square buttons on the right.
+	const COLORREF colBar      = RGB(74, 78, 86);
+	const COLORREF colBarLight = RGB(96, 100, 110);
+	const COLORREF colBarLine  = RGB(40, 43, 49);
+	const COLORREF colTitle    = RGB(232, 236, 240);
+	const COLORREF colGlyph    = RGB(232, 236, 240);
+	const COLORREF colHover    = RGB(96, 100, 110);
+	const COLORREF colClose     = RGB(196, 64, 60);
+
+	RECT bar = { 0, 0, CLIENT_W, TITLE_H };
+
+	// Bar background.
+	HBRUSH barBrush = CreateSolidBrush(colBar);
+	FillRect(hdc, &bar, barBrush);
+	DeleteObject(barBrush);
+
+	// Subtle 1px highlight along the top edge, and a divider line at the bottom.
+	HPEN topPen = CreatePen(PS_SOLID, 1, colBarLight);
+	HPEN oldPen = (HPEN)SelectObject(hdc, topPen);
+	MoveToEx(hdc, 0, 0, NULL);           LineTo(hdc, CLIENT_W, 0);
+	SelectObject(hdc, oldPen);
+	DeleteObject(topPen);
+
+	HPEN linePen = CreatePen(PS_SOLID, 1, colBarLine);
+	oldPen = (HPEN)SelectObject(hdc, linePen);
+	MoveToEx(hdc, 0, TITLE_H - 1, NULL); LineTo(hdc, CLIENT_W, TITLE_H - 1);
+	SelectObject(hdc, oldPen);
+	DeleteObject(linePen);
+
+	// Title text.
+	SetBkMode(hdc, TRANSPARENT);
+	HFONT titleFont = CreateFontW(15, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
+		DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+		CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI");
+	HFONT oldFont = (HFONT)SelectObject(hdc, titleFont);
+	SetTextColor(hdc, colTitle);
+	RECT trTitle = { 8, 0, CLIENT_W - 2 * BTN_W - 4, TITLE_H };
+	DrawTextW(hdc, L"EuroScope Snake", -1, &trTitle,
+		DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+	SelectObject(hdc, oldFont);
+	DeleteObject(titleFont);
+
+	// Button backgrounds on hover.
+	RECT rMin   = { CLIENT_W - 2 * BTN_W, 0, CLIENT_W - BTN_W, TITLE_H - 1 };
+	RECT rClose = { CLIENT_W - BTN_W,     0, CLIENT_W,         TITLE_H - 1 };
+
+	if (m_hoverBtn == BTN_MIN)
+	{
+		HBRUSH b = CreateSolidBrush(colHover);
+		FillRect(hdc, &rMin, b);
+		DeleteObject(b);
+	}
+	if (m_hoverBtn == BTN_CLOSE)
+	{
+		HBRUSH b = CreateSolidBrush(colClose);
+		FillRect(hdc, &rClose, b);
+		DeleteObject(b);
+	}
+
+	// Glyphs.
+	HPEN glyphPen = CreatePen(PS_SOLID, 1, colGlyph);
+	oldPen = (HPEN)SelectObject(hdc, glyphPen);
+
+	// Minimize: a short horizontal bar near the vertical centre.
+	{
+		const int cx = (rMin.left + rMin.right) / 2;
+		const int cy = TITLE_H / 2 + 3;
+		MoveToEx(hdc, cx - 5, cy, NULL);
+		LineTo(hdc, cx + 5, cy);
+	}
+	// Close: an X.
+	{
+		const int cx = (rClose.left + rClose.right) / 2;
+		const int cy = TITLE_H / 2;
+		MoveToEx(hdc, cx - 4, cy - 4, NULL); LineTo(hdc, cx + 5, cy + 5);
+		MoveToEx(hdc, cx + 4, cy - 4, NULL); LineTo(hdc, cx - 5, cy + 5);
+	}
+
+	SelectObject(hdc, oldPen);
+	DeleteObject(glyphPen);
 }
