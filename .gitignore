@@ -28,13 +28,11 @@ cmake_install.cmake
 # Build artifacts
 *.obj
 *.o
-*.lib
 *.exp
 *.pdb
 *.ilk
 *.idb
 *.dll
 
-# EuroScope SDK (copy it in locally; do not commit)
-sdk/EuroScopePlugIn.h
-sdk/EuroScopePlugIn.lib
+# Note: the EuroScope SDK (sdk/EuroScopePlugIn.h, sdk/EuroScopePlugInDll.lib)
+# is committed so GitHub Actions can build the plugin.

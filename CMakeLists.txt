@@ -9,7 +9,8 @@ project(EuroScopeSnake LANGUAGES CXX)
 #   cmake --build build --config Release
 #
 # EUROSCOPE_SDK must point at a folder containing EuroScopePlugIn.h and
-# EuroScopePlugIn.lib (shipped with EuroScope — see README.md).
+# EuroScopePlugInDll.lib (shipped with EuroScope — see README.md).  Both files
+# are committed under sdk/, which is the default, so a plain configure works.
 #
 
 set(CMAKE_CXX_STANDARD 14)
@@ -31,8 +32,9 @@ target_include_directories(EuroScopeSnake PRIVATE
 
 # Link against the EuroScope import library and the Win32 GDI/User libraries.
 find_library(EUROSCOPE_LIB
-    NAMES EuroScopePlugIn
+    NAMES EuroScopePlugInDll EuroScopePlugIn
     PATHS "${EUROSCOPE_SDK}"
+    NO_DEFAULT_PATH
 )
 
 if(EUROSCOPE_LIB)
