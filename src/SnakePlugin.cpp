@@ -7,6 +7,7 @@
 //
 
 #include "SnakePlugin.h"
+#include <string>
 #include <cstring>
 #include <cctype>
 
