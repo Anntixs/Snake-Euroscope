@@ -42,34 +42,6 @@ The window uses a custom **EuroScope-style title bar** (no standard Windows
 frame): drag it by the grey caption strip, and use the **–** / **✕** buttons to
 minimize or close.
 
-## Download a prebuilt DLL (easiest)
-
-Every push is built on GitHub Actions. To grab the compiled plugin:
-
-1. Open the **Actions** tab of this repository.
-2. Click the most recent **"Build EuroScope Snake plugin"** run.
-3. Download the **`EuroScopeSnake-dll`** artifact — it contains
-   `EuroScopeSnake.dll`.
-
-Then jump to [Install into EuroScope](#install-into-euroscope).
-
-## Building locally
-
-EuroScope is a **32-bit** application, so the plugin **must** be compiled for
-**x86 / Win32**. The EuroScope SDK (`EuroScopePlugIn.h` and
-`EuroScopePlugInDll.lib`) is already committed under `sdk/`, so no extra setup
-is needed:
-
-```powershell
-cmake -A Win32 -B build
-cmake --build build --config Release
-```
-
-This produces `build/Release/EuroScopeSnake.dll`.
-
-> To build against a different SDK location, pass
-> `-DEUROSCOPE_SDK="C:/path/to/EuroScopeSDK"`.
-
 ## Install into EuroScope
 
 1. Open EuroScope.
