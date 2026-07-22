@@ -33,13 +33,19 @@ public:
 
 private:
 	// ---- grid / geometry --------------------------------------------------
-	static const int GRID_W = 24;      // cells across
-	static const int GRID_H = 24;      // cells down
-	static const int CELL   = 22;      // pixel size of one cell
-	static const int HEADER = 40;      // pixels reserved for the score bar
-	static const int MARGIN = 12;      // border around the play field
+	static const int GRID_W  = 24;     // cells across
+	static const int GRID_H  = 24;     // cells down
+	static const int CELL    = 22;     // pixel size of one cell
+	static const int TITLE_H = 22;     // custom EuroScope-style title bar height
+	static const int HEADER  = 40;     // pixels reserved for the score bar
+	static const int MARGIN  = 12;     // border around the play field
+	static const int BTN_W   = 26;     // width of a title-bar button
+
+	static const int CLIENT_W = MARGIN * 2 + GRID_W * CELL;
+	static const int CLIENT_H = TITLE_H + HEADER + MARGIN * 2 + GRID_H * CELL;
 
 	enum Dir { DIR_UP, DIR_DOWN, DIR_LEFT, DIR_RIGHT };
+	enum TitleButton { BTN_NONE = 0, BTN_MIN = 1, BTN_CLOSE = 2 };
 
 	struct Cell { int x; int y; };
 
@@ -54,7 +60,12 @@ private:
 	void OnKeyDown(WPARAM key);
 	void OnMouseMove(int mx, int my);
 	void OnLButtonDown(int mx, int my);
+	void OnLButtonUp(int mx, int my);
 	void OnTick();
+
+	// ---- custom title bar -------------------------------------------------
+	TitleButton HitTestButton(int mx, int my) const;
+	void DrawTitleBar(HDC hdc);
 
 	// ---- game logic -------------------------------------------------------
 	void ResetGame();
@@ -78,6 +89,11 @@ private:
 	bool   m_paused;
 	UINT_PTR m_timer;
 	unsigned m_rngState;
+
+	// ---- custom-chrome window state ---------------------------------------
+	bool        m_dragging;    // true while the title bar is being dragged
+	POINT       m_dragOffset;  // cursor offset from the window's top-left
+	TitleButton m_hoverBtn;    // which title-bar button the cursor is over
 
 	unsigned NextRandom();
 };

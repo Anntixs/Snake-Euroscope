@@ -38,6 +38,10 @@ Type these into the EuroScope command line (bottom of the screen):
 
 Eat the red food to grow and score. Hitting a wall or yourself ends the game.
 
+The window uses a custom **EuroScope-style title bar** (no standard Windows
+frame): drag it by the grey caption strip, and use the **–** / **✕** buttons to
+minimize or close.
+
 ## Download a prebuilt DLL (easiest)
 
 Every push is built on GitHub Actions. To grab the compiled plugin:
