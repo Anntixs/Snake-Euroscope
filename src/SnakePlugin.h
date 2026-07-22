@@ -7,6 +7,13 @@
 // that opens, closes or toggles the standalone Snake game window.
 //
 
+// The EuroScope SDK header uses Win32 types (POINT, RECT, COLORREF, NULL) but
+// does not include <windows.h> itself, so we must pull it in first.
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+
 #include "EuroScopePlugIn.h"
 #include "SnakeWindow.h"
 
