@@ -1,20 +1,12 @@
-# Put the EuroScope SDK here
+# EuroScope SDK
 
-This folder is where the build looks for the EuroScope plugin SDK by default
-(`-DEUROSCOPE_SDK` defaults to `./sdk`).
+This folder holds the EuroScope plugin SDK that the build links against
+(`-DEUROSCOPE_SDK` defaults to `./sdk`):
 
-Copy these two files from your EuroScope installation into this folder:
+* `EuroScopePlugIn.h`   — the SDK header
+* `EuroScopePlugInDll.lib` — the import library (x86)
 
-* `EuroScopePlugIn.h`
-* `EuroScopePlugIn.lib`
-
-They ship with EuroScope (the SDK Gergely releases alongside each EuroScope
-version). They are **not** redistributed in this repository — see the root
-`README.md` for details.
-
-Once both files are present here you can build with:
-
-```powershell
-cmake -A Win32 -B build
-cmake --build build --config Release
-```
+These files are committed so that GitHub Actions (and a fresh clone) can build
+the plugin without any extra setup. They ship with EuroScope itself; if you ever
+need to update them, copy the newer versions from your EuroScope installation
+over the ones here.
