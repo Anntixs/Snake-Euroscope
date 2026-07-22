@@ -109,7 +109,15 @@ DWORD WINAPI SnakeWindow::ThreadProc(LPVOID param)
 
 void SnakeWindow::RunMessageLoop()
 {
-	HINSTANCE hInst = GetModuleHandle(NULL);
+	// Use THIS DLL's module handle (not EuroScope.exe's) for the window class,
+	// derived from the address of a symbol that lives in our module.
+	HINSTANCE hInst = NULL;
+	GetModuleHandleExW(
+		GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+		GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+		reinterpret_cast<LPCWSTR>(&kClassName), &hInst);
+	if (!hInst)
+		hInst = GetModuleHandle(NULL);
 
 	WNDCLASSEXW wc = { 0 };
 	wc.cbSize = sizeof(wc);
@@ -143,7 +151,10 @@ void SnakeWindow::RunMessageLoop()
 		NULL, NULL, hInst, this);
 
 	if (!hWnd)
+	{
+		UnregisterClassW(kClassName, hInst);
 		return;
+	}
 
 	ShowWindow(hWnd, SW_SHOW);
 	UpdateWindow(hWnd);
@@ -155,6 +166,10 @@ void SnakeWindow::RunMessageLoop()
 		TranslateMessage(&msg);
 		DispatchMessage(&msg);
 	}
+
+	// Unregister the class so a later plugin reload doesn't inherit a stale
+	// window class that points at a WndProc in an unloaded DLL.
+	UnregisterClassW(kClassName, hInst);
 }
 
 LRESULT CALLBACK SnakeWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)

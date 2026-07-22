@@ -28,4 +28,5 @@ public:
 
 private:
 	SnakeWindow m_window;
+	bool        m_greeted;   // whether the one-time welcome message was shown
 };

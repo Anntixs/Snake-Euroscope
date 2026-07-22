@@ -39,10 +39,12 @@ static std::string ToLowerTrim(const char* s)
 SnakePlugin::SnakePlugin()
 	: CPlugIn(EuroScopePlugIn::COMPATIBILITY_CODE,
 	          PLUGIN_NAME, PLUGIN_VERSION, PLUGIN_AUTHOR, PLUGIN_LICENSE)
+	, m_greeted(false)
 {
-	DisplayUserMessage("Snake", "Snake",
-		"Loaded. Type .snake to open the game (.snake close to hide it).",
-		true, true, false, false, false);
+	// IMPORTANT: do NOT call any EuroScope API (DisplayUserMessage, etc.) here.
+	// During the CPlugIn constructor EuroScope has not finished registering the
+	// plugin instance yet, so calling back into it crashes EuroScope on load.
+	// The welcome message is deferred to the first OnCompileCommand instead.
 }
 
 SnakePlugin::~SnakePlugin()
@@ -57,6 +59,15 @@ bool SnakePlugin::OnCompileCommand(const char* sCommandLine)
 	// We only react to commands that start with ".snake".
 	if (cmd.compare(0, 6, ".snake") != 0)
 		return false;
+
+	// Show a one-time welcome (safe here — the plugin is fully registered now).
+	if (!m_greeted)
+	{
+		m_greeted = true;
+		DisplayUserMessage("Snake", "Snake",
+			"Type .snake to open the game, .snake close to hide it.",
+			true, true, false, false, false);
+	}
 
 	// Everything after ".snake" is the (optional) argument.
 	std::string arg = cmd.substr(6);
